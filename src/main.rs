@@ -26,10 +26,8 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.file_path)?;
 
     for line in search(&config.query, &contents) {
-        print!("{line}");
+        print!("{line}\n");
     }  
-
-    println!("With text:\n{contents}");
 
     Ok(())
 }
