@@ -6,12 +6,8 @@ use minigrep::search;
 use minigrep::search_case_insensitive;
 
 fn main() {
-    // explicit type annotation here since .collect() can return many types of collections
-    // and Rust compiler can't infer (implicit) which one you want
-    let args: Vec<String> = env::args().collect();
-
-    // || {...} syntax -> closure -> anonymous functions in Rust
-    let config = Config::build(&args).unwrap_or_else(|err| {
+    // pass ownership of iterator returned by env::args() to Config::build() (more mem efficient)
+    let config = Config::build(env::args()).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {err}");
         process::exit(1);
     });
@@ -23,7 +19,7 @@ fn main() {
 }
 
 fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    // in case of an error return said error back to caller (main) with ?
+    // ? operator unwraps Ok or returns error back to caller (main)
     let contents = fs::read_to_string(config.file_path)?;
 
     let results = if config.ignore_case {
@@ -33,7 +29,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
     };
 
     for line in results {
-        print!("{line}\n");
+        println!("{line}");
     }  
 
     Ok(())
@@ -46,17 +42,25 @@ struct Config {
 }
 
 impl Config {
-    // in case of Err Rust compiler needs to know lifetime of str slice (static for entire duration of program)
-    fn build(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("Not enough arguments");
-        }
-        // we create deep copy with .clone() to avoid managing lifetime references/issues (negligible tradeoff)
-        // if you want overkill you could annotate lifetimes 
-        let query = args[1].clone();
-        let file_path = args[2].clone();
+    fn build(
+        // any type implementing Iterator<Item = String> (avoids Vec allocation)
+        // 'static lifetime for error message -> live for entire program
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        // ignore 1st value (name of program)
+        args.next();
 
-        // env::var() returns Result and .is_ok() converts to bool (true if env var is set)
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a query string"),
+        };
+
+        let file_path = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a file path"),
+        };
+
+        // env::var() returns Result and .is_ok() converts to bool 
         let ignore_case = env::var("IGNORE_CASE").is_ok();
 
         Ok(Config { query, file_path, ignore_case, })
